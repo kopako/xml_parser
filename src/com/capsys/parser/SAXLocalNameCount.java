@@ -1,6 +1,6 @@
 package com.capsys.parser;
 
-import com.capsys.parser.model.RcvTxInf;
+import com.capsys.parser.model.ATxInf;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
@@ -18,11 +18,10 @@ public class SAXLocalNameCount extends DefaultHandler {
         put("RjctTxInf", false);
         put("SntTxInf", false);
     }};
-    private Object rcvTxInf = null;
+    private ATxInf transaction = null;
     private StringBuilder data = null;
 
     private boolean bStartElement = false;
-
 
 
     @Override
@@ -33,8 +32,8 @@ public class SAXLocalNameCount extends DefaultHandler {
             bStartElement = true;
             // initialize Employee object and set id attribute
             try {
-                rcvTxInf = Class
-                        .forName("com.capsys.parser.model."+ qName)
+                transaction = (ATxInf) Class
+                        .forName("com.capsys.parser.model." + qName)
                         .getDeclaredConstructor(null).newInstance();
             } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
                 e.printStackTrace();
@@ -51,15 +50,17 @@ public class SAXLocalNameCount extends DefaultHandler {
 
     @Override
     public void endElement(String uri, String localName, String qName) throws SAXException {
-
-        if (bStartElement && Arrays.stream(rcvTxInf.getClass().getDeclaredFields())
-                .map(Field::getName)
-                .anyMatch(a -> a.equalsIgnoreCase(qName))) {
+        String localQName = qName;
+        if (bStartElement && Arrays.stream(transaction.getClass().getSuperclass().getDeclaredFields()).map(Field::getName).anyMatch(a -> qName.contains(a))) {
             Field dynamicField;
+            int nPos = qName.indexOf("TxRsn");
+            if (nPos > 0) {
+                localQName = qName.substring(nPos);
+            }
             try {
-                dynamicField = rcvTxInf.getClass().getDeclaredField(qName);
+                dynamicField = transaction.getClass().getSuperclass().getDeclaredField(localQName);
                 dynamicField.setAccessible(true);
-                dynamicField.set(rcvTxInf, data.toString());
+                dynamicField.set(transaction, data.toString());
             } catch (NoSuchFieldException | IllegalAccessException e) {
                 e.printStackTrace();
             }
@@ -68,7 +69,14 @@ public class SAXLocalNameCount extends DefaultHandler {
         if (tableFlags.containsKey(qName)) {
             tableFlags.replaceAll((k, v) -> false);
             bStartElement = false;
-            System.out.println(rcvTxInf);
+
+            try {
+                transaction.insertTx();
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new SAXException(e);
+            }
+
         }
     }
 
